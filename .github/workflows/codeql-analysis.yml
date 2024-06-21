@@ -1,30 +1,52 @@
-name: "CodeQL Scan"
+name: Generate CycloneDX SBOM
 
-on:
-  push:
-  pull_request:
+on: [push]
 
 jobs:
-  analyze:
-    name: Analyze
+  generate-sbom:
     runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'javascript' ]
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@5a4ac9002d0be2fb38bd78e4b4dbde5606d7042f #v2: v2.3.4 available
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v1
+    - name: Checkout code
+      uses: actions/checkout@v2
+    
+    - name: Set up Python
+      uses: actions/setup-python@v2
       with:
-        languages: ${{ matrix.language }}
-        queries: security-extended
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v1
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v1
+        python-version: '3.x'
+    
+    - name: Install dependencies
+      run: pip install cyclonedx-python-lib
+    
+    - name: Generate SBOM
+      run: |
+        python -c "
+        import subprocess
+        import os
+        from cyclonedx.model.bom import Bom
+        from cyclonedx.model.component import Component
+        from cyclonedx.output import get_instance, OutputFormat
+
+        def clone_repo(repo_url, local_dir):
+            subprocess.run(['git', 'clone', repo_url, local_dir])
+
+        def list_python_dependencies(local_dir):
+            requirements_path = os.path.join(local_dir, 'requirements.txt')
+            with open(requirements_path, 'r') as f:
+                dependencies = f.readlines()
+            return [dep.strip() for dep in dependencies]
+
+        def generate_sbom(dependencies):
+            bom = Bom()
+            for dep in dependencies:
+                component = Component(name=dep, version='unknown')
+                bom.components.add(component)
+            return bom
+
+        repo_url = '${{ github.repository }}'
+        local_dir = '/path/to/local/dir'
+        clone_repo(repo_url, local_dir)
+        dependencies = list_python_dependencies(local_dir)
+        bom = generate_sbom(dependencies)
+        output = get_instance(bom, output_format=OutputFormat.JSON)
+        print(output.output_as_string())
+        "
