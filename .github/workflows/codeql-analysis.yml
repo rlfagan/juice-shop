@@ -20,33 +20,37 @@ jobs:
     - name: Generate SBOM
       run: |
         python -c "
-        import subprocess
-        import os
-        from cyclonedx.model.bom import Bom
-        from cyclonedx.model.component import Component
-        from cyclonedx.output import get_instance, OutputFormat
+import subprocess
+import os
+from cyclonedx.model.bom import Bom
+from cyclonedx.model.component import Component
+from cyclonedx.output import OutputFormat, SchemaVersion, output_as_string
 
-        def clone_repo(repo_url, local_dir):
-            subprocess.run(['git', 'clone', repo_url, local_dir])
+def clone_repo(repo_url, local_dir):
+    subprocess.run(['git', 'clone', repo_url, local_dir])
 
-        def list_python_dependencies(local_dir):
-            requirements_path = os.path.join(local_dir, 'requirements.txt')
-            with open(requirements_path, 'r') as f:
-                dependencies = f.readlines()
-            return [dep.strip() for dep in dependencies]
+def list_python_dependencies(local_dir):
+    requirements_path = os.path.join(local_dir, 'requirements.txt')
+    with open(requirements_path, 'r') as f:
+        dependencies = f.readlines()
+    return [dep.strip() for dep in dependencies]
 
-        def generate_sbom(dependencies):
-            bom = Bom()
-            for dep in dependencies:
-                component = Component(name=dep, version='unknown')
-                bom.components.add(component)
-            return bom
+def generate_sbom(dependencies):
+    bom = Bom()
+    for dep in dependencies:
+        component = Component(name=dep, version='unknown')
+        bom.components.add(component)
+    return bom
 
-        repo_url = '${{ github.repository }}'
-        local_dir = '/path/to/local/dir'
-        clone_repo(repo_url, local_dir)
-        dependencies = list_python_dependencies(local_dir)
-        bom = generate_sbom(dependencies)
-        output = get_instance(bom, output_format=OutputFormat.JSON)
-        print(output.output_as_string())
+def main():
+    repo_url = '${{ github.repository }}'
+    local_dir = '/path/to/local/dir'
+    clone_repo(repo_url, local_dir)
+    dependencies = list_python_dependencies(local_dir)
+    bom = generate_sbom(dependencies)
+    bom_json = output_as_string(bom, output_format=OutputFormat.JSON, schema_version=SchemaVersion.V1_2)
+    print(bom_json)
+
+if __name__ == '__main__':
+    main()
         "
